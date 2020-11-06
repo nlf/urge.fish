@@ -1,10 +1,16 @@
-# lucid
+# urge
 
 A minimalist, high-performance fish prompt with async git dirty checks that just work.
 
-![Preview](https://github.com/mattgreen/lucid.fish/raw/master/media/screenshot.png)
+Forked from the excellent [lucid.fish](https://github.com/mattgreen/lucid.fish).
 
 ## Features
+
+### Changes in urge
+
+* Nothing, yet
+
+### Inherited from lucid
 
 * Classy, minimal left prompt that surfaces only actionable information
 * Asynchronous git dirty state prevents prompt-induced lag even on [massive repositories](https://github.com/llvm/llvm-project)
@@ -20,7 +26,7 @@ A minimalist, high-performance fish prompt with async git dirty checks that just
 
 Install with fisher:
 
-    $ fisher add mattgreen/lucid.fish
+    $ fisher add nlf/urge.fish
 
 **Back up your existing prompt before doing this!**
 
@@ -28,21 +34,7 @@ Or install it manually. It's only one file, after all.
 
 ## Performance
 
-Initial rendering is fast enough, considering that the LLVM repo has over **361,000 commits**:
-
-```shell
-~/Projects/llvm-project on master •
-❯ time fish_prompt
-
-~/Projects/llvm-project on master •
-❯
-________________________________________________________
-Executed in   14.05 millis    fish           external
-   usr time    5.96 millis    2.10 millis    3.86 millis
-   sys time    6.87 millis    2.54 millis    4.33 millis
-```
-
-lucid fetches most git information synchronously. This minimizes the amount of flicker induced by prompt redraws, which can be distracting. This initial time encompasses:
+urge fetches most git information synchronously. This minimizes the amount of flicker induced by prompt redraws, which can be distracting. This initial time encompasses:
 
 1. getting the git working directory
 2. retrieving the current branch
@@ -53,10 +45,10 @@ This information is memoized to avoid re-computation during prompt redraws, whic
 
 ## Customization
 
-* `lucid_dirty_indicator`: displayed when a repository is dirty. Default: `•`
-* `lucid_clean_indicator`: displayed when a repository is clean. Should be at least as long as `lucid_dirty_indicator` to work around a fish bug. Default: ` ` (a space)
-* `lucid_cwd_color`: color used for current working directory. Default: `green`
-* `lucid_git_color`: color used for git information. Default: `blue`
+* `urge_dirty_indicator`: displayed when a repository is dirty. Default: `•`
+* `urge_clean_indicator`: displayed when a repository is clean. Should be at least as long as `urge_dirty_indicator` to work around a fish bug. Default: ` ` (a space)
+* `urge_cwd_color`: color used for current working directory. Default: `green`
+* `urge_git_color`: color used for git information. Default: `blue`
 
 ## Design
 
@@ -66,21 +58,10 @@ After launching the job, the parent process immediately registers a completion h
 
 The rest is book-keeping and careful coding. There may be a few more opportunities for optimization. Send a PR if you find any!
 
-### Previous Design Iterations
-
-The tough problem here is keeping the execution time low, and communicating the dirty status from the job back to the parent.
-
-Here are a few other approaches that didn't pan out:
-
-* **IPC via universal variables**: variable contents are round-tripped by disk, which is a non-starter
-* **IPC via named FIFO**: fish is unable to hold the reader side of a named FIFO open, causing writers to block indefinitely
-* **IPC via tmpfs**: macOS does not have a `tmpfs` filesystem available by default
-* **Other POSIX IPC facilities**: these would necessitate a third-party binary dependency
-
 ## Known Issues
 
 * fish has a bug involving multi-line prompts not being redrawn correctly. You usually see this when invoking `fzf`.
-* lucid uses a background job to asynchronously fetch dirty status. If you try to exit while a dirty status has not completed, fish will warn you it is still running. Unfortunately, lucid is not able to `disown` the job because it needs to collect the exit status from it.
+* urge uses a background job to asynchronously fetch dirty status. If you try to exit while a dirty status has not completed, fish will warn you it is still running. Unfortunately, urge is not able to `disown` the job because it needs to collect the exit status from it.
 
 ## License
 MIT
