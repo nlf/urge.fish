@@ -13,11 +13,19 @@ if ! set -q urge_clean_indicator
 end
 
 if ! set -q urge_cwd_color
-    set -g urge_cwd_color green
+    set -g urge_cwd_color normal
 end
 
 if ! set -q urge_git_color
-    set -g urge_git_color blue
+    set -g urge_git_color 928374
+end
+
+if ! set -q urge_prompt_color_ok
+    set -g urge_prompt_color_ok blue
+end
+
+if ! set -q urge_prompt_color_error
+    set -g urge_prompt_color_error red
 end
 
 # State used for memoization and async calls.
@@ -166,28 +174,8 @@ function __urge_git_status
     set_color normal
 end
 
-function __urge_vi_indicator
-    if [ $fish_key_bindings = "fish_vi_key_bindings" ]
-        switch $fish_bind_mode
-            case "insert"
-                set_color green
-                echo -n "[I] "
-            case "default"
-                set_color red
-                echo -n "[N] "
-            case "visual"
-                set_color yellow
-                echo -n "[S] "
-        end
-        set_color normal
-    end
-end
-
-# Suppress default mode prompt
-function fish_mode_prompt
-end
-
 function fish_prompt
+    set -l exit_code $status
     set -l cwd (pwd | string replace "$HOME" '~')
 
     echo ''
@@ -198,11 +186,15 @@ function fish_prompt
     if test $cwd != '~'
         set -l git_state (__urge_git_status)
         if test $status -eq 0
-            echo -sn " on $git_state"
+            echo -sn " $git_state"
         end
     end
 
-    echo ''
-    __urge_vi_indicator
-    echo -n "$urge_prompt_symbol "
+    if test $exit_code -eq 0
+        set_color $urge_prompt_color_ok
+    else
+        set_color $urge_prompt_color_error
+    end
+    echo -n " $urge_prompt_symbol "
+    set_color normal
 end
