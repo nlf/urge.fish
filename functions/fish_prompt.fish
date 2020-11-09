@@ -174,16 +174,66 @@ function __urge_git_status
     set_color normal
 end
 
+function urge_update_shortpwd --on-variable PWD
+    if string match -q $PWD '/'
+        set -g SHORTPWD '/'
+        return
+    end
+
+    if string match -q $PWD $HOME
+        set -g SHORTPWD '~'
+        return
+    end
+
+    set -l path
+    set -l fullpath
+    set -l trimmedpath (echo $PWD | string replace "$HOME" '')
+    if string match -q $trimmedpath $PWD
+        set path ""
+        set fullpath "/"
+    else
+        set path "~"
+        set fullpath "$HOME"
+    end
+    set -l parts (echo $trimmedpath | string trim -l -r --chars=/' ' | string split '/')
+    set -l current 0
+    set -l length (count $parts)
+
+    for part in $parts
+        set current (math $current + 1)
+        if test $current -eq $length
+            set path "$path/$part"
+            break
+        end
+
+        set -l depth 1
+        set -l partsegment (string sub --length $depth $part)
+        set -l matches (command find $fullpath -type d -maxdepth 1 -name "$partsegment*")
+        while test (count $matches) -gt 1; and test $depth -lt (string length $part)
+            set depth (math $depth + 1)
+            set partsegment (string sub --length $depth $part)
+            set matches (command find $fullpath -type d -maxdepth 1 -name "$partsegment*")
+        end
+
+        set path $path/$partsegment
+        set fullpath $fullpath/$part
+    end
+
+    set -g SHORTPWD $path
+end
+
 function fish_prompt
     set -l exit_code $status
-    set -l cwd (pwd | string replace "$HOME" '~')
+    if ! set -q SHORTPWD
+        urge_update_shortpwd
+    end
 
     echo ''
     set_color $urge_cwd_color
-    echo -sn $cwd
+    echo -sn $SHORTPWD
     set_color normal
 
-    if test $cwd != '~'
+    if ! string match -q $SHORTPWD '~'
         set -l git_state (__urge_git_status)
         if test $status -eq 0
             echo -sn " $git_state"
