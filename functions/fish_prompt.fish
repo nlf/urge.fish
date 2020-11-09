@@ -1,23 +1,38 @@
 # Default appearance options. Override in config.fish if you want.
-if ! set -q urge_dirty_indicator
-    set -g urge_dirty_indicator "•"
+if ! set -q urge_untracked_indicator
+    set -g urge_untracked_indicator "…"
 end
+
+if ! set -q urge_unstaged_indicator
+    set -g urge_unstaged_indicator "+"
+end
+
+if ! set -q urge_staged_color
+    set -g urge_staged_color green
+end
+
+if ! set -q urge_unstaged_color
+    set -g urge_unstaged_color red
+end
+
+if ! set -q urge_clean_color
+    set -g urge_clean_color 928374
+end
+
+set -g urge_git_color $urge_clean_color
 
 if ! set -q urge_prompt_symbol
     set -g urge_prompt_symbol "❯"
 end
 
-# This should be set to be at least as long as urge_dirty_indicator, due to a fish bug
+# This should be set to be at least as long as urge_unstaged_indicator and urge_untracked_indicator combined, due to a fish bug
 if ! set -q urge_clean_indicator
-    set -g urge_clean_indicator (string replace -r -a '.' ' ' $urge_dirty_indicator)
+    set -g urge_clean_indicator ""
+    # set -g urge_clean_indicator (string replace -r -a '.' ' ' $urge_untracked_indicator$urge_unstaged_indicator)
 end
 
 if ! set -q urge_cwd_color
     set -g urge_cwd_color normal
-end
-
-if ! set -q urge_git_color
-    set -g urge_git_color 928374
 end
 
 if ! set -q urge_prompt_color_ok
@@ -101,8 +116,20 @@ function __urge_git_status
     if test -z $__urge_dirty
         if ! set -q __urge_check_pid
             # Compose shell command to run in background
-            set -l check_cmd "git --no-optional-locks status -unormal --porcelain --ignore-submodules 2>/dev/null | head -n1 | count"
-            set -l cmd "if test ($check_cmd) != "0"; exit 1; else; exit 0; end"
+            set -l cmd '\
+                set -l git_state (git --no-optional-locks status -unormal --ignore-submodules 2>&1)
+                set -l result 0
+                if string match -r "Changes to be committed" $git_state
+                    set result (math $result + 5)
+                end
+                if string match -r "Changes not staged" $git_state
+                    set result (math $result + 3)
+                end
+                if string match -r "Untracked files" $git_state
+                    set result (math $result + 1)
+                end
+                exit $result\
+                ' | string escape
 
             begin
                 # Defer execution of event handlers by fish for the remainder of lexical scope.
@@ -121,22 +148,9 @@ function __urge_git_status
 
                     if set -q __urge_check_pid
                         if test $pid -eq $__urge_check_pid
-                            switch $argv[3]
-                                case 0
-                                    set -g __urge_dirty_state 0
-                                    if status is-interactive
-                                        commandline -f repaint
-                                    end
-                                case 1
-                                    set -g __urge_dirty_state 1
-                                    if status is-interactive
-                                        commandline -f repaint
-                                    end
-                                case '*'
-                                    set -g __urge_dirty_state 2
-                                    if status is-interactive
-                                        commandline -f repaint
-                                    end
+                            set -g __urge_dirty_state $argv[3]
+                            if status is-interactive
+                                commandline -f repaint
                             end
                         end
                     end
@@ -146,12 +160,30 @@ function __urge_git_status
 
         if set -q __urge_dirty_state
             switch $__urge_dirty_state
+                case 9
+                    set -g __urge_dirty $urge_unstaged_indicator$urge_untracked_indicator
+                    set -g urge_git_color $urge_staged_color
+                case 8
+                    set -g __urge_dirty $urge_unstaged_indicator
+                    set -g urge_git_color $urge_staged_color
+                case 6
+                    set -g __urge_dirty $urge_untracked_indicator
+                    set -g urge_git_color $urge_staged_color
+                case 5
+                    set -g __urge_dirty $urge_clean_indicator
+                    set -g urge_git_color $urge_staged_color
+                case 4
+                    set -g __urge_dirty $urge_untracked_indicator
+                    set -g urge_git_color $urge_unstaged_color
+                case 3
+                    set -g __urge_dirty $urge_clean_indicator
+                    set -g urge_git_color $urge_unstaged_color
+                case 1
+                    set -g __urge_dirty $urge_untracked_indicator
+                    set -g urge_git_color $urge_clean_color
                 case 0
                     set -g __urge_dirty $urge_clean_indicator
-                case 1
-                    set -g __urge_dirty $urge_dirty_indicator
-                case 2
-                    set -g __urge_dirty "<err>"
+                    set -g urge_git_color $urge_clean_color
             end
 
             set -e __urge_check_pid
@@ -161,7 +193,7 @@ function __urge_git_status
 
     # Render git status. When in-progress, use previous state to reduce flicker.
     set_color $urge_git_color
-    echo -n $__urge_git_static ''
+    echo -n $__urge_git_static
 
     if ! test -z $__urge_dirty
         echo -n $__urge_dirty
