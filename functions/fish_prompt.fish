@@ -1,47 +1,15 @@
 # Default appearance options. Override in config.fish if you want.
-if ! set -q urge_untracked_indicator
-    set -g urge_untracked_indicator "…"
-end
-
-if ! set -q urge_unstaged_indicator
-    set -g urge_unstaged_indicator "+"
-end
-
-if ! set -q urge_staged_color
-    set -g urge_staged_color green
-end
-
-if ! set -q urge_unstaged_color
-    set -g urge_unstaged_color red
-end
-
-if ! set -q urge_clean_color
-    set -g urge_clean_color 928374
-end
-
+set -g urge_untracked_indicator "…"
+set -g urge_unstaged_indicator "+"
+set -g urge_staged_color green
+set -g urge_unstaged_color red
+set -g urge_clean_color 928374
 set -g urge_git_color $urge_clean_color
-
-if ! set -q urge_prompt_symbol
-    set -g urge_prompt_symbol "❯"
-end
-
-# This should be set to be at least as long as urge_unstaged_indicator and urge_untracked_indicator combined, due to a fish bug
-if ! set -q urge_clean_indicator
-    set -g urge_clean_indicator ""
-    # set -g urge_clean_indicator (string replace -r -a '.' ' ' $urge_untracked_indicator$urge_unstaged_indicator)
-end
-
-if ! set -q urge_cwd_color
-    set -g urge_cwd_color normal
-end
-
-if ! set -q urge_prompt_color_ok
-    set -g urge_prompt_color_ok blue
-end
-
-if ! set -q urge_prompt_color_error
-    set -g urge_prompt_color_error red
-end
+set -g urge_prompt_symbol "❯"
+set -g urge_clean_indicator ""
+set -g urge_cwd_color normal
+set -g urge_prompt_color_ok blue
+set -g urge_prompt_color_error red
 
 # State used for memoization and async calls.
 set -g __urge_cmd_id 0
