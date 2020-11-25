@@ -1,21 +1,34 @@
-# Default appearance options. Override in config.fish if you want.
-set -g urge_untracked_indicator "…"
-set -g urge_unstaged_indicator "+"
-set -g urge_staged_color green
-set -g urge_unstaged_color red
-set -g urge_clean_color 928374
-set -g urge_git_color $urge_clean_color
+# appearance options
+set -g urge_untracked_indicator ""
+set -g urge_unstaged_indicator ""
+set -g urge_staged_indicator ""
+set -g urge_git_color 928374
+set -g urge_git_color_staged green
+set -g urge_git_color_unstaged red
+set -g urge_git_color_modified yellow
 set -g urge_prompt_symbol "❯"
-set -g urge_clean_indicator ""
 set -g urge_cwd_color normal
 set -g urge_prompt_color_ok blue
 set -g urge_prompt_color_error red
 
-# State used for memoization and async calls.
+# state used for memoization and async storage
 set -g __urge_cmd_id 0
 set -g __urge_git_state_cmd_id -1
-set -g __urge_git_static ""
-set -g __urge_dirty ""
+
+function __urge_set_dict -a type dir value
+    set -l dict_name __urge'_'$type'_'(string escape --style=var $dir)
+    set -g $dict_name $value
+end
+
+function __urge_get_dict -a type dir
+    set -l dict_name __urge'_'$type'_'(string escape --style=var $dir)
+    echo $$dict_name
+end
+
+function __urge_del_dict -a type dir
+    set -l dict_name __urge'_'$type'_'(string escape --style=var $dir)
+    set -e $dict_name
+end
 
 # Increment a counter each time a prompt is about to be displayed.
 # Enables us to distingish between redraw requests and new prompts.
@@ -23,36 +36,47 @@ function __urge_increment_cmd_id --on-event fish_prompt
     set __urge_cmd_id (math $__urge_cmd_id + 1)
 end
 
-# Abort an in-flight dirty check, if any.
-function __urge_abort_check
-    if set -q __urge_check_pid
-        set -l pid $__urge_check_pid
-        functions -e __urge_on_finish_$pid
-        command kill $pid >/dev/null 2>&1
-        set -e __urge_check_pid
+function __urge_job -a job_name callback cmd
+    if set -q $job_name
+        return 0
+    end
+
+    set -l job_result _job_result_(random)
+    set -g $job_name
+    set -U $job_result "…"
+
+    fish -c "set -U $job_result (eval $cmd | string escape)" &
+    set -l pid (jobs --last --pid)
+    disown $pid
+
+    function _job_$pid -v $job_result -V pid -V job_result -V callback -V job_name
+        set -e $job_name
+        eval $callback $$job_result
+        functions -e _job_$pid
+        set -e $job_result
     end
 end
 
-function __urge_git_status
-    # Reset state if this call is *not* due to a redraw request
-    set -l prev_dirty $__urge_dirty
+function __urge_git_info -a git_dir
+    set -l prev_state (__urge_get_dict states $git_dir)
+    # not a repaint, clear the state
     if test $__urge_cmd_id -ne $__urge_git_state_cmd_id
-        __urge_abort_check
-
         set __urge_git_state_cmd_id $__urge_cmd_id
-        set __urge_git_static ""
-        set __urge_dirty ""
+        __urge_del_dict branches $git_dir
+        __urge_del_dict colors $git_dir
+        __urge_del_dict states $git_dir
+    end
+
+    set -l branch (__urge_get_dict branches $git_dir)
+    set -l state (__urge_get_dict states $git_dir)
+    set -l branch_color (__urge_get_dict colors $git_dir)
+    if test -z (string trim $branch_color)
+        set branch_color $urge_git_color
     end
 
     # Fetch git position & action synchronously.
     # Memoize results to avoid recomputation on subsequent redraws.
-    if test -z $__urge_git_static
-        # Determine git working directory
-        set -l git_dir (command git --no-optional-locks rev-parse --absolute-git-dir 2>/dev/null)
-        if test $status -ne 0
-            return 1
-        end
-
+    if test -z $branch
         set -l position (command git --no-optional-locks symbolic-ref --short HEAD 2>/dev/null)
         if test $status -ne 0
             # Denote detached HEAD state with short commit hash
@@ -64,12 +88,12 @@ function __urge_git_status
 
         # TODO: add bisect
         set -l action ""
-        if test -f "$git_dir/MERGE_HEAD"
+        if test -f "$git_dir/.git/MERGE_HEAD"
             set action "merge"
-        else if test -d "$git_dir/rebase-merge"
-            set branch "rebase"
-        else if test -d "$git_dir/rebase-apply"
-            set branch "rebase"
+        else if test -d "$git_dir/.git/rebase-merge"
+            set action "rebase"
+        else if test -d "$git_dir/.git/rebase-apply"
+            set action "rebase"
         end
 
         set -l state $position
@@ -77,104 +101,58 @@ function __urge_git_status
             set state "$state <$action>"
         end
 
-        set -g __urge_git_static $state
+        set branch $state
+        __urge_set_dict branches $git_dir $branch
     end
 
-    # Fetch dirty status asynchronously.
-    if test -z $__urge_dirty
-        if ! set -q __urge_check_pid
-            # Compose shell command to run in background
-            set -l cmd '\
-                set -l git_state (git --no-optional-locks status -unormal --ignore-submodules 2>&1)
-                set -l result 0
-                if string match -r "Changes to be committed" $git_state
-                    set result (math $result + 5)
-                end
-                if string match -r "Changes not staged" $git_state
-                    set result (math $result + 3)
-                end
-                if string match -r "Untracked files" $git_state
-                    set result (math $result + 1)
-                end
-                exit $result\
-                ' | string escape
-
-            begin
-                # Defer execution of event handlers by fish for the remainder of lexical scope.
-                # This is to prevent a race between the child process exiting before we can get set up.
-                block -l
-
-                set -g __urge_check_pid 0
-                command fish --private --command "$cmd" >/dev/null 2>&1 &
-                set -l pid (jobs --last --pid)
-
-                set -g __urge_check_pid $pid
-
-                # Use exit code to convey dirty status to parent process.
-                function __urge_on_finish_$pid --inherit-variable pid --on-process-exit $pid
-                    functions -e __urge_on_finish_$pid
-
-                    if set -q __urge_check_pid
-                        if test $pid -eq $__urge_check_pid
-                            set -g __urge_dirty_state $argv[3]
-                            if status is-interactive
-                                commandline -f repaint
-                            end
-                        end
-                    end
-                end
-            end
+    echo -sn (set_color $branch_color) $branch (set_color normal)
+    if test -z $state
+        if set -q prev_state
+            echo -n " "
+            echo -sn (set_color --dim $urge_git_color) $prev_state (set_color normal)
         end
-
-        if set -q __urge_dirty_state
-            switch $__urge_dirty_state
-                case 9
-                    set -g __urge_dirty $urge_unstaged_indicator$urge_untracked_indicator
-                    set -g urge_git_color $urge_staged_color
-                case 8
-                    set -g __urge_dirty $urge_unstaged_indicator
-                    set -g urge_git_color $urge_staged_color
-                case 6
-                    set -g __urge_dirty $urge_untracked_indicator
-                    set -g urge_git_color $urge_staged_color
-                case 5
-                    set -g __urge_dirty $urge_clean_indicator
-                    set -g urge_git_color $urge_staged_color
-                case 4
-                    set -g __urge_dirty $urge_untracked_indicator
-                    set -g urge_git_color $urge_unstaged_color
-                case 3
-                    set -g __urge_dirty $urge_clean_indicator
-                    set -g urge_git_color $urge_unstaged_color
-                case 1
-                    set -g __urge_dirty $urge_untracked_indicator
-                    set -g urge_git_color $urge_clean_color
-                case 0
-                    set -g __urge_dirty $urge_clean_indicator
-                    set -g urge_git_color $urge_clean_color
-            end
-
-            set -e __urge_check_pid
-            set -e __urge_dirty_state
-        end
+        set -l cmd "echo -n $git_dir'X'; git --no-optional-locks status -unormal --ignore-submodules 2>&1 | string join X"
+        __urge_job "__urge_git_check" __urge_git_callback $cmd
+    else
+        echo -n " "
+        echo -sn (set_color $urge_git_color) $state (set_color normal)
     end
-
-    # Render git status. When in-progress, use previous state to reduce flicker.
-    set_color $urge_git_color
-    echo -n $__urge_git_static
-
-    if ! test -z $__urge_dirty
-        echo -n $__urge_dirty
-    else if ! test -z $prev_dirty
-        set_color --dim $urge_git_color
-        echo -n $prev_dirty
-        set_color normal
-    end
-
-    set_color normal
 end
 
-function urge_update_shortpwd --on-variable PWD
+function __urge_git_callback -a git_state
+    set -l lines (string split "X" "$git_state")
+    set -l git_dir (string trim $lines[1])
+    set -l result
+    set -l color $urge_git_color
+
+    if string match -r "Changes to be committed" $git_state &>/dev/null
+        set -a result $urge_staged_indicator
+        set color $urge_git_color_staged
+    end
+    if string match -r "Changes not staged" $git_state &>/dev/null
+        set -a result $urge_unstaged_indicator
+        if test $color = $urge_git_color
+            set color $urge_git_color_unstaged
+        else
+            set color $urge_git_color_modified
+        end
+    end
+    if string match -r "Untracked files" $git_state &>/dev/null
+        set -a result $urge_untracked_indicator
+    end
+    set -l padlength 6
+    if string length -q $result
+        set padlength (math 6 - (string length (string join0 $result)))
+    end
+    set -a result (string repeat -n $padlength " ")
+    __urge_set_dict states $git_dir "$result"
+    __urge_set_dict colors $git_dir "$color"
+    if status is-interactive
+        commandline -f repaint
+    end
+end
+
+function __urge_shortpwd --on-variable PWD
     if string match -q $PWD '/'
         set -g SHORTPWD '/'
         return
@@ -222,22 +200,23 @@ function urge_update_shortpwd --on-variable PWD
     set -g SHORTPWD $path
 end
 
+
 function fish_prompt
     set -l exit_code $status
     if ! set -q SHORTPWD
-        urge_update_shortpwd
+        __urge_shortpwd
     end
 
-    echo ''
+    echo ""
     set_color $urge_cwd_color
-    echo -sn $SHORTPWD
-    set_color normal
+    echo -n $SHORTPWD ""
 
-    if ! string match -q $SHORTPWD '~'
-        set -l git_state (__urge_git_status)
-        if test $status -eq 0
-            echo -sn " $git_state"
-        end
+    set -l git_dir (command git rev-parse --show-toplevel 2>/dev/null)
+    if test -n "$git_dir"
+        # we are in a git dir, so gather that info and refresh async state
+        echo -s (__urge_git_info $git_dir)
+    else
+        echo
     end
 
     if test $exit_code -eq 0
@@ -245,6 +224,6 @@ function fish_prompt
     else
         set_color $urge_prompt_color_error
     end
-    echo -n " $urge_prompt_symbol "
+    echo -n $urge_prompt_symbol ""
     set_color normal
 end
