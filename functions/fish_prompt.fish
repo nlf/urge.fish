@@ -43,13 +43,13 @@ function __urge_job -a job_name callback cmd
     set -g $job_name
     set -U $job_result "…"
 
-    fish -c "set -U $job_result (eval $cmd | string escape)" &
+    fish -Pc "set -U $job_result (string escape (eval $cmd | string collect))" &
     set -l pid (jobs --last --pid)
     disown $pid
 
     function _job_$pid -v $job_result -V pid -V job_result -V callback -V job_name
         set -e $job_name
-        eval $callback $$job_result
+        eval $callback (echo $$job_result | string collect)
         functions -e _job_$pid
         set -e $job_result
     end
@@ -107,16 +107,14 @@ function __urge_git_info -a git_dir
         if set -q prev_state
             echo -sn (set_color --dim $branch_color) $branch $prev_state (set_color normal)
         end
-        set -l cmd "echo -n $git_dir'X'; git --no-optional-locks status -unormal --ignore-submodules 2>&1 | string join X"
-        __urge_job "__urge_git_check" __urge_git_callback $cmd
+        set -l cmd "echo $git_dir; git --no-optional-locks status -unormal --ignore-submodules 2>&1"
+        __urge_job "__urge_git_check" __urge_git_callback $cmd &>/dev/null
     else
         echo -sn (set_color $branch_color) $branch $state (set_color normal)
     end
 end
 
-function __urge_git_callback -a git_state
-    set -l lines (string split "X" "$git_state")
-    set -l git_dir (string trim $lines[1])
+function __urge_git_callback -a git_dir git_state
     set -l result
     set -l color $urge_git_color
 
@@ -214,6 +212,5 @@ function fish_prompt
     else
         set_color $urge_prompt_color_error
     end
-    echo -n $urge_prompt_symbol ""
-    set_color normal
+    echo -n $urge_prompt_symbol (set_color normal)
 end

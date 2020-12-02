@@ -12,14 +12,16 @@ function fish_right_prompt
         echo -sn (set_color $urge_right_prompt_color) $__urge_rp_state (set_color normal)
     else
         set -l cmd "node -v | cut -dv -f2; npm -v"
-        __urge_job "__urge_refresh_rp" __urge_rp_callback $cmd
+        __urge_job "__urge_refresh_rp" __urge_rp_callback $cmd &>/dev/null
     end
-
 end
 
 function __urge_rp_callback -a node_version npm_version
-    set -g __urge_rp_state "node@$node_version npm@$npm_version"
-    if status is-interactive
-        commandline -f force-repaint
+    set -l state "node@$node_version npm@$npm_version"
+    if not set -q __urge_rp_state; or test $state != $__urge_rp_state
+        set -g __urge_rp_state $state
+        if status is-interactive
+            commandline -f force-repaint
+        end
     end
 end
