@@ -1,7 +1,5 @@
 # appearance options
-set -g urge_untracked_indicator ""
-set -g urge_unstaged_indicator ""
-set -g urge_staged_indicator ""
+set -g urge_untracked_indicator "…"
 set -g urge_git_color 928374
 set -g urge_git_color_staged green
 set -g urge_git_color_unstaged red
@@ -105,17 +103,14 @@ function __urge_git_info -a git_dir
         __urge_set_dict branches $git_dir $branch
     end
 
-    echo -sn (set_color $branch_color) $branch (set_color normal)
     if test -z $state
         if set -q prev_state
-            echo -n " "
-            echo -sn (set_color --dim $urge_git_color) $prev_state (set_color normal)
+            echo -sn (set_color --dim $branch_color) $branch $prev_state (set_color normal)
         end
         set -l cmd "echo -n $git_dir'X'; git --no-optional-locks status -unormal --ignore-submodules 2>&1 | string join X"
         __urge_job "__urge_git_check" __urge_git_callback $cmd
     else
-        echo -n " "
-        echo -sn (set_color $urge_git_color) $state (set_color normal)
+        echo -sn (set_color $branch_color) $branch $state (set_color normal)
     end
 end
 
@@ -126,11 +121,9 @@ function __urge_git_callback -a git_state
     set -l color $urge_git_color
 
     if string match -r "Changes to be committed" $git_state &>/dev/null
-        set -a result $urge_staged_indicator
         set color $urge_git_color_staged
     end
     if string match -r "Changes not staged" $git_state &>/dev/null
-        set -a result $urge_unstaged_indicator
         if test $color = $urge_git_color
             set color $urge_git_color_unstaged
         else
