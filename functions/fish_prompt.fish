@@ -131,17 +131,15 @@ function __urge_git_callback -a git_state
         end
     end
     if string match -r "Untracked files" $git_state &>/dev/null
-        set -a result $urge_untracked_indicator
+        set result $urge_untracked_indicator
     end
-    set -l padlength 6
-    if string length -q $result
-        set padlength (math 6 - (string length (string join0 $result)))
+    if test -z $result
+        set result " "
     end
-    set -a result (string repeat -n $padlength " ")
     __urge_set_dict states $git_dir "$result"
     __urge_set_dict colors $git_dir "$color"
     if status is-interactive
-        commandline -f repaint
+        commandline -f force-repaint
     end
 end
 
@@ -201,15 +199,14 @@ function fish_prompt
     end
 
     echo ""
+    echo -s (set_color --dim $urge_git_color) (string repeat -n $COLUMNS "─")
     set_color $urge_cwd_color
     echo -n $SHORTPWD ""
 
     set -l git_dir (command git rev-parse --show-toplevel 2>/dev/null)
     if test -n "$git_dir"
         # we are in a git dir, so gather that info and refresh async state
-        echo -s (__urge_git_info $git_dir)
-    else
-        echo
+        echo -sn (__urge_git_info $git_dir)
     end
 
     if test $exit_code -eq 0
