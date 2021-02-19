@@ -45,7 +45,6 @@ function __urge_job -a job_name callback cmd
 
     fish -Pc "set -U $job_result (string escape (eval $cmd | string collect))" &
     set -l pid (jobs --last --pid)
-    disown $pid
 
     function _job_$pid -v $job_result -V pid -V job_result -V callback -V job_name
         set -e $job_name
