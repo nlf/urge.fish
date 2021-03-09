@@ -8,7 +8,7 @@ Forked from the excellent [lucid.fish](https://github.com/mattgreen/lucid.fish).
 
 ### Changes in urge
 
-* Nothing, yet
+* node and npm versions in the right prompt
 
 ### Inherited from lucid
 
@@ -20,7 +20,7 @@ Forked from the excellent [lucid.fish](https://github.com/mattgreen/lucid.fish).
 
 ## Requirements
 
-* fish 3.1
+* fish 3.2 (3.1 works but creates a lot of zombie processes due to a bug)
 
 ## Installation
 
